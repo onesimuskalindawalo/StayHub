@@ -4,12 +4,15 @@ import { useState, useEffect } from 'react';
 import { History, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { paymentService } from '@/services/paymentService';
-import { Payment } from '@/types';
+import { Payment, UserRole } from '@/types';
 import { toast } from 'react-hot-toast';
+import { useAuthStore } from '@/store/authStore';
 
 export default function PaymentsPage() {
+  const { user } = useAuthStore();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     loadPayments();
@@ -18,13 +21,32 @@ export default function PaymentsPage() {
   const loadPayments = async () => {
     setIsLoading(true);
     try {
-      const data = await paymentService.getPayments();
+      const data = await paymentService.getPayments(user?.role === UserRole.STUDENT ? user?.id : undefined);
       setPayments(data);
     } catch (error: any) {
       toast.error('Failed to load transaction history.');
       console.error(error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeposit = async () => {
+    if (!user) return;
+    setIsProcessing(true);
+    try {
+      await paymentService.createPayment({
+        userId: user.id,
+        amount: 250, // Static amount for mock
+        bookingId: '1', // Static mapping for mock
+        status: 'paid'
+      });
+      toast.success('Contribution indexed successfully.');
+      loadPayments();
+    } catch (error) {
+      toast.error('Transaction indexing failed.');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -44,9 +66,15 @@ export default function PaymentsPage() {
               Transparent ledger documentation of residency contributions and institutional transaction history.
             </p>
           </div>
-          <button className="px-8 py-3 bg-black text-white text-[12px] font-medium tracking-widest hover:bg-slate-800 transition-colors">
-            DEPOSIT
-          </button>
+          {user?.role === UserRole.STUDENT && (
+            <button 
+              onClick={handleDeposit}
+              disabled={isProcessing}
+              className="px-8 py-3 bg-black text-white text-[12px] font-medium tracking-widest hover:bg-slate-800 transition-colors disabled:opacity-50"
+            >
+              {isProcessing ? 'PROCESSING...' : 'DEPOSIT'}
+            </button>
+          )}
         </div>
       </header>
 

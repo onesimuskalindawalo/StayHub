@@ -1,19 +1,60 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { 
   formatCurrency
 } from '@/lib/utils';
 import { motion } from 'motion/react';
+import { bookingService } from '@/services/bookingService';
+import { paymentService } from '@/services/paymentService';
+import { Booking, Payment } from '@/types';
+import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
 export function StudentDashboard() {
   const { user } = useAuthStore();
+  const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      loadData();
+    }
+  }, [user]);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const [bookingsData, paymentsData] = await Promise.all([
+        bookingService.getBookings(user?.id),
+        paymentService.getPayments(user?.id)
+      ]);
+      
+      const active = bookingsData.find(b => b.status === 'approved');
+      setActiveBooking(active || null);
+      setPayments(paymentsData);
+    } catch (error) {
+      console.error('Failed to load dashboard data', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-48">
+        <Loader2 className="w-6 h-6 animate-spin text-slate-100" />
+      </div>
+    );
+  }
 
   const stats = [
-    { name: 'Stay Status', value: 'Approved', color: 'text-green-500' },
-    { name: 'Room Assigned', value: '402-B', color: 'text-slate-900' },
-    { name: 'Upcoming Payment', value: formatCurrency(150), color: 'text-amber-500' },
-    { name: 'Check-in', value: 'Sep 01, 2025', color: 'text-slate-900' },
+    { name: 'Stay Status', value: activeBooking ? 'Approved' : 'No Active Stay', color: activeBooking ? 'text-green-500' : 'text-slate-300' },
+    { name: 'Room Assigned', value: activeBooking ? `Suite ${activeBooking.roomId}` : 'Pending', color: 'text-slate-900' },
+    { name: 'Total Contributed', value: formatCurrency(payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0)), color: 'text-slate-900' },
+    { name: 'Check-in', value: activeBooking?.checkInDate || 'N/A', color: 'text-slate-900' },
   ];
 
   return (
@@ -23,7 +64,7 @@ export function StudentDashboard() {
           Welcome, <span className="font-semibold">{user?.fullName?.split(' ')[0]}</span>.
         </h2>
         <p className="text-slate-400 font-medium text-lg max-w-xl">
-          Everything is in order. Your institutional residency status is active and verified for the current semester.
+          Everything is in order. Your institutional residency status is {activeBooking ? 'active and verified' : 'under review'} for the current semester.
         </p>
       </header>
 
@@ -72,12 +113,12 @@ export function StudentDashboard() {
         <div className="lg:col-span-4 space-y-8">
           <h3 className="text-[12px] font-semibold uppercase tracking-[0.15em] text-slate-300">Operations</h3>
           <div className="space-y-2">
-            <button className="w-full py-4 px-6 bg-black text-white text-[12px] font-medium tracking-wide transition-all hover:bg-slate-800">
+            <Link href="/dashboard/rooms" className="block w-full py-4 px-6 bg-black text-white text-[12px] font-medium tracking-wide transition-all hover:bg-slate-800 text-center">
               BOOK NEW SUITE
-            </button>
-            <button className="w-full py-4 px-6 border border-slate-100 text-black text-[12px] font-medium tracking-wide transition-all hover:bg-slate-50">
+            </Link>
+            <Link href="/dashboard/payments" className="block w-full py-4 px-6 border border-slate-100 text-black text-[12px] font-medium tracking-wide transition-all hover:bg-slate-50 text-center">
               FINANCIAL LOG
-            </button>
+            </Link>
             <button className="w-full py-4 px-6 border border-slate-100 text-black text-[12px] font-medium tracking-wide transition-all hover:bg-slate-50">
               PROTOCOL SUPPORT
             </button>

@@ -2,8 +2,8 @@ import { api } from './api';
 import { Payment } from '../types';
 
 export const paymentService = {
-  getPayments: async (): Promise<Payment[]> => {
-    const response = await api.get<Payment[]>('/payments');
+  getPayments: async (userId?: string): Promise<Payment[]> => {
+    const response = await api.get<Payment[]>('/payments', { params: { userId } });
     return response.data;
   },
   

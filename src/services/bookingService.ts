@@ -2,8 +2,8 @@ import { api } from './api';
 import { Booking } from '../types';
 
 export const bookingService = {
-  getBookings: async (): Promise<Booking[]> => {
-    const response = await api.get<Booking[]>('/bookings');
+  getBookings: async (userId?: string): Promise<Booking[]> => {
+    const response = await api.get<Booking[]>('/bookings', { params: { userId } });
     return response.data;
   },
   

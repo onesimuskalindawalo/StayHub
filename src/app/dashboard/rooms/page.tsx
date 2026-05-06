@@ -13,15 +13,26 @@ import { Room, RoomStatus, RoomType, UserRole } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { roomService } from '@/services/roomService';
+import { bookingService } from '@/services/bookingService';
 import { toast } from 'react-hot-toast';
 
 export default function RoomsPage() {
   const { user } = useAuthStore();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBooking, setIsBooking] = useState<string | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+
+  const [newRoom, setNewRoom] = useState({
+    roomNumber: '',
+    type: RoomType.SINGLE,
+    capacity: '1',
+    pricePerMonth: '',
+    amenities: [] as string[]
+  });
 
   useEffect(() => {
     loadRooms();
@@ -37,6 +48,37 @@ export default function RoomsPage() {
       console.error(error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCreateRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await roomService.createRoom(newRoom);
+      toast.success('Suite listing active.');
+      setIsCreateModalOpen(false);
+      loadRooms();
+    } catch (error) {
+      toast.error('Creation protocol failed.');
+    }
+  };
+
+  const handleBookRoom = async (roomId: string) => {
+    if (!user) return;
+    setIsBooking(roomId);
+    try {
+      await bookingService.createBooking({
+        userId: user.id,
+        roomId,
+        checkInDate: new Date().toISOString().split('T')[0],
+        checkOutDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days later
+      });
+      toast.success('Suite reservation initialized. Awaiting authority verification.');
+      loadRooms();
+    } catch (error) {
+      toast.error('Placement protocol failed.');
+    } finally {
+      setIsBooking(null);
     }
   };
 
@@ -57,12 +99,109 @@ export default function RoomsPage() {
           <p className="text-slate-400 font-medium text-xl">The refined selection of living spaces.</p>
         </div>
         {isAdminOrWarden && (
-          <button className="flex items-center space-x-3 px-10 py-5 bg-black text-white rounded-2xl text-[13px] font-bold tracking-tight transition-all hover:opacity-90 active:scale-95 shadow-lg shadow-black/10">
+          <button 
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center space-x-3 px-10 py-5 bg-black text-white rounded-2xl text-[13px] font-bold tracking-tight transition-all hover:opacity-90 active:scale-95 shadow-lg shadow-black/10"
+          >
             <Plus className="w-4 h-4" />
             <span>CREATE LISTING</span>
           </button>
         )}
       </header>
+
+      {/* Create Modal */}
+      <AnimatePresence>
+        {isCreateModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCreateModalOpen(false)}
+              className="absolute inset-0 bg-white/40 backdrop-blur-xl"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-xl bg-white border border-slate-100 rounded-[48px] shadow-2xl p-12 space-y-12"
+            >
+              <div className="space-y-2">
+                <h3 className="text-4xl font-extrabold tracking-tighter">New Suite</h3>
+                <p className="text-slate-400 font-medium text-lg">Define the parameters for the new residency unit.</p>
+              </div>
+
+              <form onSubmit={handleCreateRoom} className="space-y-8">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-300 ml-2 text-black">Number</label>
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="e.g. 402-B"
+                      className="w-full px-8 py-5 bg-slate-50 rounded-3xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-black/5"
+                      value={newRoom.roomNumber}
+                      onChange={(e) => setNewRoom({...newRoom, roomNumber: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-300 ml-2 text-black">Type</label>
+                    <select 
+                      className="w-full px-8 py-5 bg-slate-50 rounded-3xl text-sm font-bold focus:outline-none appearance-none"
+                      value={newRoom.type}
+                      onChange={(e) => setNewRoom({...newRoom, type: e.target.value as RoomType})}
+                    >
+                      <option value={RoomType.SINGLE}>Single</option>
+                      <option value={RoomType.DOUBLE}>Double</option>
+                      <option value={RoomType.TRIPLE}>Triple</option>
+                      <option value={RoomType.DORM}>Dorm</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-3 text-black">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-300 ml-2">Capacity</label>
+                    <input 
+                      type="number" 
+                      required
+                      className="w-full px-8 py-5 bg-slate-50 rounded-3xl text-sm font-bold focus:outline-none"
+                      value={newRoom.capacity}
+                      onChange={(e) => setNewRoom({...newRoom, capacity: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-3 text-black">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-300 ml-2">Rate (Monthly)</label>
+                    <input 
+                      type="number" 
+                      required
+                      className="w-full px-8 py-5 bg-slate-50 rounded-3xl text-sm font-bold focus:outline-none"
+                      value={newRoom.pricePerMonth}
+                      onChange={(e) => setNewRoom({...newRoom, pricePerMonth: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  <button 
+                    type="button"
+                    onClick={() => setIsCreateModalOpen(false)}
+                    className="flex-1 py-5 border border-slate-100 rounded-3xl text-[13px] font-bold text-slate-400 hover:text-black hover:bg-slate-50 transition-all font-black text-black"
+                  >
+                    ABORT
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-[2] py-5 bg-black text-white rounded-3xl text-[13px] font-bold shadow-xl shadow-black/10 hover:opacity-90 transition-all text-black"
+                  >
+                    DEPLOY LISTING
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Filters */}
       <div className="flex flex-col lg:flex-row gap-4 items-center">
@@ -158,8 +297,12 @@ export default function RoomsPage() {
                   <div className="mt-auto">
                     <div className="flex gap-2">
                       {user?.role === UserRole.STUDENT && room.status === RoomStatus.AVAILABLE ? (
-                        <button className="flex-1 py-5 bg-black text-white rounded-3xl text-[13px] font-bold transform transition-all hover:scale-[0.98] active:scale-[0.95] shadow-lg shadow-black/5">
-                          SECURE SUITE
+                        <button 
+                          onClick={() => handleBookRoom(room.id)}
+                          disabled={isBooking === room.id}
+                          className="flex-1 py-5 bg-black text-white rounded-3xl text-[13px] font-bold transform transition-all hover:scale-[0.98] active:scale-[0.95] shadow-lg shadow-black/5 disabled:opacity-50"
+                        >
+                          {isBooking === room.id ? 'SECURING...' : 'SECURE SUITE'}
                         </button>
                       ) : (
                         <button className="flex-1 py-5 bg-slate-50 text-slate-400 rounded-3xl text-[13px] font-bold transform transition-all hover:scale-[0.98]">
